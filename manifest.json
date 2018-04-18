@@ -1,0 +1,6 @@
+{
+  "name": "Story Lighting Reader",
+  "version": "1.0",
+  "description": "Story Lighting creates an immersive storytelling experience for new and classic non-fiction long-form stories from across the web, by integrating with your Phillips Hue Lights.",
+  "manifest_version": 2
+}
