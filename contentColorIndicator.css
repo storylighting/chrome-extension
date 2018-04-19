@@ -1,0 +1,20 @@
+p[data-paragraph-id] {
+  position: relative;
+}
+
+p[data-paragraph-id]:hover .storyLight-color-indicator {
+  visibility: visible;
+}
+
+.storyLight-color-indicator {
+  visibility: hidden;
+  display: block;
+  position: absolute;
+  top: 0;
+  right: -20px;
+  width: 20px;
+}
+
+.storyLight-color-fill {
+  fill: blue;
+}
