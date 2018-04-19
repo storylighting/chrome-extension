@@ -11,4 +11,8 @@ chrome.runtime.onInstalled.addListener(function() {
           actions: [new chrome.declarativeContent.ShowPageAction()]
     }]);
   });
+  chrome.pageAction.onClicked.addListener(function (){
+    chrome.tabs.executeScript({file: 'contentSniffer.js'});
+    chrome.tabs.insertCSS({file: 'contentColorIndicator.css'});
+  });
 });
