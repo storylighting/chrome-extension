@@ -1,9 +1,26 @@
 p[data-paragraph-id] {
   position: relative;
+  margin-right:20px;
 }
 
 p[data-paragraph-id]:hover .storyLight-color-indicator {
   visibility: visible;
+}
+
+.storyLight-color-label {
+  position: relative;
+}
+
+.storyLight-color-label svg {
+  position: absolute;
+  top: 0;
+}
+
+.storyLight-color-input {
+  visibility:hidden;
+  padding: 0px;
+  margin: 0px;
+  border: 0px;
 }
 
 .storyLight-color-indicator {

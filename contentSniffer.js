@@ -196,7 +196,15 @@ function markUpArticleParagraphs(pageSelectedContainer, paragraphs){
 
     if (paragraph == paragraphCandidate){
       elem.dataset.paragraphId=i;
-      elem.innerHTML += '<div class="storyLight-color-indicator"><svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" xml:space="preserve" viewBox="0 0 62 76.3"><path class="storyLight-color-fill" d="M34.7,1.5c-1.1-1-2.5-1.5-3.9-1.5C29.4,0,28,0.5,27,1.5l0,0L8.9,20.9H9C-3,33.8-3,53.8,9,66.7c5.7,6.1,13.7,9.6,22,9.6l0,0c8.3,0,16.3-3.4,22-9.5C65,53.9,65,33.9,53,21L34.7,1.5z"></path></svg></div>';
+      elem.innerHTML += `<div class="storyLight-color-indicator"><label class="storyLight-color-label"><input class="storyLight-color-input" id="storyLight-paragraph-id-${i}-color-input" type="color"><svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" xml:space="preserve" viewBox="0 0 62 76.3"><path id="storyLight-paragraph-id-${i}-color-fill" class="storyLight-color-fill" d="M34.7,1.5c-1.1-1-2.5-1.5-3.9-1.5C29.4,0,28,0.5,27,1.5l0,0L8.9,20.9H9C-3,33.8-3,53.8,9,66.7c5.7,6.1,13.7,9.6,22,9.6l0,0c8.3,0,16.3-3.4,22-9.5C65,53.9,65,33.9,53,21L34.7,1.5z"></path></svg></label></div>`;
+
+      // Setup Watch
+      let fill = document.getElementById(`storyLight-paragraph-id-${i}-color-fill`);
+      document.getElementById(`storyLight-paragraph-id-${i}-color-input`).addEventListener("input", function(){
+        console.log(i, event.target.value, fill);
+        fill.setAttribute("style", `fill: ${event.target.value};`);
+      }, false);
+
       markedUpParagraphs.push(elem);
       j++;
     }
