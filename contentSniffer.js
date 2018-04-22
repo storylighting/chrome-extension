@@ -201,7 +201,6 @@ function markUpArticleParagraphs(pageSelectedContainer, paragraphs){
       // Setup Watch
       let fill = document.getElementById(`storyLight-paragraph-id-${i}-color-fill`);
       document.getElementById(`storyLight-paragraph-id-${i}-color-input`).addEventListener("input", function(){
-        console.log(i, event.target.value, fill);
         fill.setAttribute("style", `fill: ${event.target.value};`);
       }, false);
 
@@ -231,7 +230,7 @@ function scrollSpyInit(){
  *
  *  @global {Array<Object>} paragraphScrollSpies
  */
-function paragraphSpy(){
+function updateParagraphSpies(){
   let windowHeight = window.innerHeight;
   for (var i in paragraphScrollSpies){
     let element = paragraphScrollSpies[i];
@@ -240,49 +239,93 @@ function paragraphSpy(){
     element.height = elementRect.top;
     element.inViewPort = false;
     element.partialView = false;
+    element.boxVisible = 0;
 
     if (elementRect.top < 0 && (elementRect.top + elementRect.height) > 0){
       // Check Partial Elements
       element.inViewPort = true;
       element.partialView = true;
+      element.boxVisible = (elementRect.top + elementRect.height) / elementRect.height;
     }
 
     if (elementRect.top > 0 && elementRect.top < windowHeight && (elementRect.top + elementRect.height) > windowHeight){
       // Check Partial Elements
       element.inViewPort = true;
       element.partialView = true;
+      element.boxVisible = (windowHeight - elementRect.top) / elementRect.height;
     }
 
     if (elementRect.top < 0 && (elementRect.top + elementRect.height) > windowHeight){
       // Check Partial Elements
       element.inViewPort = true;
       element.partialView = true;
+      element.boxVisible = windowHeight / elementRect.height;
     }
 
     // On Screen
     if (elementRect.top > 0 && elementRect.top < windowHeight){
       element.inViewPort = true;
+      element.boxVisible = 1;
     }
 
   };
 }
 
+/**
+ *  Select primary paragraph reader is reading.
+ *
+ *  @global {Array<Object>} paragraphScrollSpies
+ *  @return {Array<HTMLElement>} an array of HTMLElements representing the paragraphs to watch.
+ */
+function selectDominantParagraph(){
+  let visibleParagraphs = paragraphScrollSpies.filter(spy => spy.inViewPort && spy.boxVisible > .5);
+  let rankedParagraphs = visibleParagraphs.sort(function (a,b){
+    return a.height-b.height;
+  });
+  return rankedParagraphs[0];
+}
+
+/**
+ *  Pulls color from a given HTMLElement pargraph.
+ *
+ *  @param {Number} paragraphId
+ *  @return {Array<HTMLElement>} an array of HTMLElements representing the paragraphs to watch.
+ */
+function selectColor(id){
+  let colorInputElement = document.getElementById(`storyLight-paragraph-id-${id}-color-input`);
+  return colorInputElement.value;
+}
+
+/**
+ *  Principal Queuing Function. Handles every scroll event.
+ *
+ *  @global {Number} paragraphId
+ */
 function handleScroll(){
   // Update Spies
-  paragraphSpy();
+  updateParagraphSpies();
+
+  // Select Paragraph
+  let paragraphSpy = selectDominantParagraph();
+
+  // Update Colors
+  if (paragraphId != paragraphSpy.id){
+    let color = selectColor(paragraphSpy.id);
+    console.log(color);
+    paragraphId = paragraphSpy.id
+  }
 }
 
-function getPositionOfElement(domElement){
-  return domElement.getBoundingClientRect().top;
-}
-
+var paragraphId = -1;
 var pageSelectedContainer = getArticleContainer();
 var paragraphs = getArticleContent(pageSelectedContainer);
 var paragraphElements = markUpArticleParagraphs(pageSelectedContainer, paragraphs);
 var paragraphScrollSpies = paragraphElements.map(function(element) {return {
   inViewPort: false,
   partialView: false,
+  boxVisible: 0,
   element: element,
+  id: element.dataset.paragraphId,
   height: 0
 };});
 
