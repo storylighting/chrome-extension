@@ -213,6 +213,78 @@ function markUpArticleParagraphs(pageSelectedContainer, paragraphs){
   return markedUpParagraphs;
 }
 
+/**
+ *  Attach Scroll Spy to `scroll` like events.
+ */
+function scrollSpyInit(){
+  if (document.addEventListener){
+    document.addEventListener("touchmove", handleScroll, false);
+    document.addEventListener("scroll", handleScroll, false);
+  }
+  else if (window.attachEvent){
+    window.attachEvent("onscroll", handleScroll);
+  }
+}
+
+/**
+ *  Spys on Paragraphs
+ *
+ *  @global {Array<Object>} paragraphScrollSpies
+ */
+function paragraphSpy(){
+  let windowHeight = window.innerHeight;
+  for (var i in paragraphScrollSpies){
+    let element = paragraphScrollSpies[i];
+    let elementRect = element.element.getBoundingClientRect();
+
+    element.height = elementRect.top;
+    element.inViewPort = false;
+    element.partialView = false;
+
+    if (elementRect.top < 0 && (elementRect.top + elementRect.height) > 0){
+      // Check Partial Elements
+      element.inViewPort = true;
+      element.partialView = true;
+    }
+
+    if (elementRect.top > 0 && elementRect.top < windowHeight && (elementRect.top + elementRect.height) > windowHeight){
+      // Check Partial Elements
+      element.inViewPort = true;
+      element.partialView = true;
+    }
+
+    if (elementRect.top < 0 && (elementRect.top + elementRect.height) > windowHeight){
+      // Check Partial Elements
+      element.inViewPort = true;
+      element.partialView = true;
+    }
+
+    // On Screen
+    if (elementRect.top > 0 && elementRect.top < windowHeight){
+      element.inViewPort = true;
+    }
+
+  };
+}
+
+function handleScroll(){
+  // Update Spies
+  paragraphSpy();
+}
+
+function getPositionOfElement(domElement){
+  return domElement.getBoundingClientRect().top;
+}
+
 var pageSelectedContainer = getArticleContainer();
 var paragraphs = getArticleContent(pageSelectedContainer);
 var paragraphElements = markUpArticleParagraphs(pageSelectedContainer, paragraphs);
+var paragraphScrollSpies = paragraphElements.map(function(element) {return {
+  inViewPort: false,
+  partialView: false,
+  element: element,
+  height: 0
+};});
+
+scrollSpyInit();
+
