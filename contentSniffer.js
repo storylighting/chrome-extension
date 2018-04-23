@@ -308,10 +308,13 @@ function handleScroll(){
   // Select Paragraph
   let paragraphSpy = selectDominantParagraph();
 
-  // Update Colors
+  // Throttle Unnecessary Updates
   if (paragraphId != paragraphSpy.id){
     let color = selectColor(paragraphSpy.id);
-    console.log(color);
+
+    // Update Color Response
+    chrome.runtime.sendMessage({type: "colorUpdate", color: color}, function(response) {return true;});
+
     paragraphId = paragraphSpy.id
   }
 }
