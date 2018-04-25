@@ -1,3 +1,15 @@
+// Initialize Firebase
+var config = {
+  apiKey: "**REMOVED**",
+  authDomain: "story-lighting.firebaseapp.com",
+  databaseURL: "https://story-lighting.firebaseio.com",
+  projectId: "story-lighting",
+  storageBucket: "story-lighting.appspot.com",
+  messagingSenderId: "**REMOVED**"
+};
+firebase.initializeApp(config);
+var db = firebase.firestore();
+
 chrome.runtime.onInstalled.addListener(function() {
   // Add Some Rules for Activating Browser Action
   chrome.declarativeContent.onPageChanged.removeRules(undefined, function() {
