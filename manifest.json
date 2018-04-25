@@ -7,8 +7,7 @@
     "activeTab" // Injecting Script to Active Tab
   ],
   "background": {
-    "scripts": ["background.js"],
-    "persistent": false
+    "page": "background.html"
   },
   "page_action": {
     "default_icon": {

@@ -282,7 +282,11 @@ function selectDominantParagraph(){
   let rankedParagraphs = visibleParagraphs.sort(function (a,b){
     return a.height-b.height;
   });
-  return rankedParagraphs[0];
+  if (rankedParagraphs.length > 0){
+    return rankedParagraphs[0];
+  }else{
+    return null;
+  }
 }
 
 /**
@@ -309,13 +313,15 @@ function handleScroll(){
   let paragraphSpy = selectDominantParagraph();
 
   // Throttle Unnecessary Updates
-  if (paragraphId != paragraphSpy.id){
-    let color = selectColor(paragraphSpy.id);
+  if (paragraphSpy === undefined || paragraphSpy === null){} else{
+    if (paragraphId != paragraphSpy.id){
+      let color = selectColor(paragraphSpy.id);
 
-    // Update Color Response
-    chrome.runtime.sendMessage({type: "colorUpdate", color: color}, function(response) {return true;});
+      // Update Color Response
+      chrome.runtime.sendMessage({type: "colorUpdate", color: color}, function(response) {return true;});
 
-    paragraphId = paragraphSpy.id
+      paragraphId = paragraphSpy.id
+    }
   }
 }
 
@@ -333,4 +339,3 @@ var paragraphScrollSpies = paragraphElements.map(function(element) {return {
 };});
 
 scrollSpyInit();
-
