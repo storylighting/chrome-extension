@@ -36,7 +36,28 @@ chrome.runtime.onMessage.addListener( function(message, sender, sendResponse) {
     // Update Server Request
     if (message.type == "colorUpdate"){
       console.log(message.color);
+      sendResponse({recieved: true});
     }
 
-    sendResponse({recieved: true});
+    if (message.type == "sendArticleContent"){
+
+      // Create URL Hash
+      let articleID = new Hashes.SHA1().hex(message.url);
+      let _date = chrono.parseDate(message.date);
+
+      db.collection("articles").doc(articleID).set({
+        id: articleID,
+        title: message.title,
+        author: message.author,
+        date: _date,
+        url: message.url,
+        paragraphs: message.paragraphs
+      })
+      .then(function() {
+        sendResponse({recieved: true});
+      })
+      .catch(function(error) {
+        sendResponse({recieved: false, error: error});
+      });
+    }
 });

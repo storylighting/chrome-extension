@@ -64,6 +64,176 @@ function getArticleContainer() {
 }
 
 /**
+ *  Get the article headline / title.
+ *
+ *  @returns {string} returns article title
+ */
+function getArticleTitle() {
+    // Get the page's title
+    var title = document.head.querySelector("title").innerText;
+
+    // Get the part before the first — if it exists
+    if(title.indexOf(' — ') > 0) {
+        return title.substr(0, title.indexOf(' — '));
+    }
+
+    // Get the part before the first – if it exists
+    if(title.indexOf(' – ') > 0) {
+        return title.substr(0, title.indexOf(' – '));
+    }
+
+    // Get the part before the first - if it exists
+    if(title.indexOf(' - ') > 0) {
+        return title.substr(0, title.indexOf(' - '));
+    }
+
+    // Get the part before the first | if it exists
+    if(title.indexOf(' | ') > 0) {
+        return title.substr(0, title.indexOf(' | '));
+    }
+
+    // Get the part before the first : if it exists
+    if(title.indexOf(' : ') > 0) {
+        return title.substr(0, title.indexOf(' : '));
+    }
+
+    return title;
+}
+
+/**
+ *  Get the article publication date
+ */
+function checkElemForDate(elem, attrList, deleteMe) {
+    var myDate = false;
+    if(elem) {
+        for(var i = 0; i < attrList.length; i++) {
+            if(elem[attrList[i]]
+             && elem[attrList[i]] != "" //  Make sure it's not empty
+             && elem[attrList[i]].split(' ').length < 10) { // Make sure the date isn't absurdly long
+                myDate = elem[attrList[i]];
+
+                if(deleteMe) {
+                    elem.dataset.simpleDelete = true; // Flag it for removal later
+                }
+            }
+        }
+    }
+
+    return myDate;
+}
+
+/**
+ *  Get the article publication date
+ *
+ *  @param {HTMLElement} pageSelectedContainer the DOM container to pull the article from.
+ *  @returns {string} returns article publication date
+ */
+function getArticleDate(pageSelectedContainer) {
+    // Make sure that the pageSelectedContainer isn't empty
+    if(pageSelectedContainer == null)
+        pageSelectedContainer = document.body;
+
+    // Check to see if there's a date class
+    var date = false,
+        toCheck = [
+            [pageSelectedContainer.querySelector('[class^="date"]'), ["innerText"], true],
+            [pageSelectedContainer.querySelector('[class*="-date"]'), ["innerText"], true],
+            [pageSelectedContainer.querySelector('[class*="_date"]'), ["innerText"], true],
+            [document.body.querySelector('[class^="date"]'), ["innerText"], false],
+            [document.body.querySelector('[class*="-date"]'), ["innerText"], false],
+            [document.body.querySelector('[class*="_date"]'), ["innerText"], false],
+            [document.head.querySelector('meta[name^="date"]'), ["content"], false],
+            [document.head.querySelector('meta[name*="-date"]'), ["content"], false],
+            [pageSelectedContainer.querySelector('time'), ["datetime", "innerText"], true],
+            [document.body.querySelector('time'), ["datetime", "innerText"], false],
+        ];
+
+
+    for(var i = 0; i < toCheck.length; i++) {
+        if(!date) {
+            var checkObj = toCheck[i];
+            date = checkElemForDate(checkObj[0], checkObj[1], checkObj[2])
+        }
+    }
+
+    if(date)
+        return date.replace(/on\s/gi, '').replace(/(?:\r\n|\r|\n)/gi, '&nbsp;').replace(/[<]br[^>]*[>]/gi,'&nbsp;'); // Replace <br>, \n, and "on"
+
+    return "Unknown date";
+}
+
+
+/**
+ *  Get the article author's
+ *
+ *  @param {HTMLElement} pageSelectedContainer the DOM container to pull the article from.
+ *  @returns {string} returns article author
+ */
+function getArticleAuthor(pageSelectedContainer) {
+    // Make sure that the pageSelectedContainer isn't empty
+    if(pageSelectedContainer == null)
+        pageSelectedContainer = document.body;
+
+    var author = null;
+
+    // Check to see if there's an author rel in the article
+    var elem = pageSelectedContainer.querySelector('[rel*="author"]');
+    if(elem) {
+        if(elem.innerText.split(/\s+/).length < 5 && elem.innerText.replace(/\s/g,'') !== "") {
+            elem.dataset.simpleDelete = true; // Flag it for removal later
+            author = elem.innerText;
+        }
+    }
+
+    // Check to see if there's an author class
+    elem = pageSelectedContainer.querySelector('[class*="author"]');
+    if(author === null && elem) {
+        if(elem.innerText.split(/\s+/).length < 5 && elem.innerText.replace(/\s/g,'') !== "") {
+            elem.dataset.simpleDelete = true; // Flag it for removal later
+            author = elem.innerText;
+        }
+    }
+
+    elem = document.head.querySelector('meta[name*="author"]');
+    // Check to see if there is an author available in the meta, if so get it
+    if(author === null && elem)
+        author = elem.getAttribute("content");
+
+    // Check to see if there's an author rel in the body
+    elem = document.body.querySelector('[rel*="author"]');
+    if(elem) {
+        if(elem.innerText.split(/\s+/).length < 5 && elem.innerText.replace(/\s/g,'') !== "") {
+            author = elem.innerText;
+        }
+    }
+
+    elem = document.body.querySelector('[class*="author"]');
+    if(author === null && elem) {
+        if(elem.innerText.split(/\s+/).length < 6 && elem.innerText.replace(/\s/g,'') !== "") {
+            author = elem.innerText;
+        }
+    }
+
+    if(author !== null && typeof author !== "undefined") {
+        // If it's all caps, try to properly capitalize it
+        if(author === author.toUpperCase()) {
+            var words = author.split(" "),
+                wordsLength = words.length;
+            for(var i = 0; i < wordsLength; i++) {
+                if(words[i].length < 3 && i != 0 && i != wordsLength)
+                    words[i] = words[i].toLowerCase(); // Assume it's something like "de", "da", "van" etc.
+                else
+                    words[i] = words[i].charAt(0).toUpperCase() + words[i].substr(1).toLowerCase();
+            }
+            author = words.join(' ');
+        }
+        return author.replace(/by\s/ig, ''); // Replace "by"
+    }
+
+    return "Unknown author";
+}
+
+/**
  *  Check if a given element is on a blacklist due to a class or ID match
  *
  *  @returns {HTMLElement, null} returns HTMLElement if not blacklisted, null otherwise.
@@ -328,6 +498,17 @@ function handleScroll(){
 var paragraphId = -1;
 var pageSelectedContainer = getArticleContainer();
 var paragraphs = getArticleContent(pageSelectedContainer);
+
+// Send Article for Processing
+chrome.runtime.sendMessage({
+  type: "sendArticleContent",
+  url: window.location.href,
+  title: getArticleTitle(),
+  author:getArticleAuthor(pageSelectedContainer),
+  date: getArticleDate(pageSelectedContainer),
+  paragraphs: paragraphs
+}, function(response) {return true;});
+
 var paragraphElements = markUpArticleParagraphs(pageSelectedContainer, paragraphs);
 var paragraphScrollSpies = paragraphElements.map(function(element) {return {
   inViewPort: false,
