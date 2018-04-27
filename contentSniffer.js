@@ -458,6 +458,42 @@ function markUpArticleParagraphs(articleContainer, paragraphs){
 }
 
 /**
+ * Add color droplets and markup to the article's paragraph elements allowing
+ * the individual paragraphs to be color editable and detected for queuing
+ * purposes.
+ *
+ * @param {HTMLElement} articleContainer The DOM element that contains the
+ *     main body of the article
+ * @param {Array<String>} paragraphs An array of unicode strings representing
+ *     the paragraphs of the main body of the article. Used to verify marking
+ *     up paragraphs according to determined order.
+ * @param {Array<String>} colors An array of hexadecimal colors specified with:
+ *     #RRGGBB, where RR (red), GG (green) and BB (blue) are hexadecimal
+ *     integers between 00 and FF specifying the intensity of the color.
+ * @return {Array<HTMLElement>} An array of `HTMLElement`s representing the
+ *     paragraph elements to watch.
+ */
+function setParagraphColors(articleContainer, paragraphs, colors){
+  var editedParagraphs = [];
+  var paragraphElements = articleContainer.getElementsByTagName("p");
+  let j = 0;
+  for (let i = 0, max = paragraphElements.length; i < max; i++) {
+    let elem = paragraphElements[i];
+    let paragraph = elem.innerText.trim();
+    let paragraphCandidate = paragraphs[j];
+
+    if (paragraph == paragraphCandidate){
+      if (setArticleParagraphColor(i, colors[i])){
+        editedParagraphs.push(elem);
+      }
+      j++;
+    }
+  }
+
+  return editedParagraphs;
+}
+
+/**
  * Initalise the paragraph scroll spy events. Mark up DOM and attach scroll spy
  * queuing logic to `scroll` like events.
  *
@@ -465,9 +501,16 @@ function markUpArticleParagraphs(articleContainer, paragraphs){
  *     main body of the article
  * @param {Array<String>} paragraphs An array of unicode strings representing
  *     the paragraphs of the main body of the article.
+ * @param {Array<String>=} colors An array of hexadecimal colors specified
+ *     with: #RRGGBB, where RR (red), GG (green) and BB (blue) are hexadecimal
+ *     integers between 00 and FF specifying the intensity of the color.
  */
-function scrollSpyInit(articleContainer, paragraphs){
+function scrollSpyInit(articleContainer, paragraphs, colors = null){
   var paragraphElements = markUpArticleParagraphs(articleContainer, paragraphs);
+
+  if (colors !== null && paragraphs.length == colors.length){
+    setParagraphColors(articleContainer, paragraphs, colors);
+  }
 
   // Create Spy Objects
   var paragraphScrollSpies = paragraphElements.map(function(element) {return {
@@ -615,6 +658,23 @@ function getArticleParagraphColor(id){
 }
 
 /**
+ * Update the color for a given article main body pargraph.
+ *
+ * @param {Number} paragraphId Paragraph number, Zero-index based
+ * @param {Array<String>=} colors A hexadecimal color specified with: #RRGGBB,
+ *     where RR (red), GG (green) and BB (blue) are hexadecimal integers
+ *     between 00 and FF specifying the intensity of the color.
+ * @return {Boolean} Whether or not the paragraph color was successfully changed.
+ */
+function setArticleParagraphColor(id, value){
+  let colorInputElement = document.getElementById(`storyLight-paragraph-id-${id}-color-input`);
+  colorInputElement.value = value;
+  // Dispatch the event to mark the change on the UI.
+  colorInputElement.dispatchEvent(new Event('input'));
+  return colorInputElement.value;
+}
+
+/**
  * Principal Queuing Function. Manages Story Lighting experience, updates
  * paragraph spies with new location information, determines the principal
  * paragraph being read, determines if a new color look needs to be issued.
@@ -719,9 +779,20 @@ chrome.runtime.sendMessage({
       var pageSelectedContainer = getArticleContainer(response.article.element);
       var paragraphs = response.article.paragraphs;
 
+      var colors = null;
+      if (!("colors" in response.article) || (typeof response.article.colors == 'undefined')) {
+        console.error("[Story Lighting Reader] Missing article paragraph `color` array from response.");
+      } else {
+        if (response.article.colors.length != response.article.paragraphs.length){
+          console.error("[Story Lighting Reader] Article content length mismatch between paragraph `colors` aray and `paragraphs` text array.");
+        } else {
+          colors = response.article.colors;
+        }
+      }
+
       // Start Paragraph Scroll Spies
-      scrollSpyInit(pageSelectedContainer.element, paragraphs);
-    }else {
+      scrollSpyInit(pageSelectedContainer.element, paragraphs, colors);
+    } else {
       // Process New Article
       var pageSelectedContainer = detectArticleContainer();
       var paragraphs = getArticleParagraphsText(pageSelectedContainer.element);

@@ -51,13 +51,14 @@ chrome.runtime.onMessage.addListener( function(message, sender, sendResponse) {
               id:  data.element.id,
               class: data.element.class
             },
+            colors: data.colors,
             paragraphs: data.paragraphs
           }});
         } else {
           sendResponse({exists: false});
         }
       }).catch(error =>{
-        console.log("permission denied, or offline and not in local storage", error);
+        console.error("[Story Lighting Reader] Database Error Response to `checkArticleContent` query. Either permission denied or the browser is offline and not in local storage.", error);
         sendResponse({exists: false});
       });
     }
