@@ -60,7 +60,25 @@ function getArticleContainer() {
     selectedContainer = selectedContainer.parentNode;
   }
 
-  return selectedContainer;
+  // provide way of finding the element in the future.
+  let container = {
+    element: selectedContainer,
+    id: "",
+    class: "",
+    method: []
+  };
+
+  if (selectedContainer.id !== ""){
+    container.id = selectedContainer.id;
+    container.method.push("id");
+  }
+
+  if (selectedContainer.className !== ""){
+    container.class = selectedContainer.className;
+    container.method.push("class");
+  }
+
+  return container;
 }
 
 /**
@@ -162,7 +180,6 @@ function getArticleDate(pageSelectedContainer) {
     return "Unknown date";
 }
 
-
 /**
  *  Get the article author's
  *
@@ -263,7 +280,7 @@ function checkElementAgainstBlacklist(elem) {
  *  @param {HTMLElement} pageSelectedContainer the DOM container to pull the article from.
  *  @return {Array<String>} an array of unicode strings representing the paragraphs of the article.
  */
-function getArticleContent(pageSelectedContainer){
+function findArticleContent(pageSelectedContainer){
 
   var contentContainer = document.createElement("div");
   contentContainer.innerHTML = pageSelectedContainer.innerHTML;
@@ -385,22 +402,38 @@ function markUpArticleParagraphs(pageSelectedContainer, paragraphs){
 /**
  *  Attach Scroll Spy to `scroll` like events.
  */
-function scrollSpyInit(){
+function scrollSpyInit(pageSelectedContainer, paragraphs){
+  var paragraphElements = markUpArticleParagraphs(pageSelectedContainer.element, paragraphs);
+  var paragraphScrollSpies = paragraphElements.map(function(element) {return {
+    inViewPort: false,
+    partialView: false,
+    boxVisible: 0,
+    element: element,
+    id: element.dataset.paragraphId,
+    height: 0
+  };});
+
   if (document.addEventListener){
-    document.addEventListener("touchmove", handleScroll, false);
-    document.addEventListener("scroll", handleScroll, false);
+    document.addEventListener("touchmove", function (){
+      handleScroll(paragraphScrollSpies);
+    }, false);
+    document.addEventListener("scroll", function (){
+      handleScroll(paragraphScrollSpies);
+    }, false);
   }
   else if (window.attachEvent){
-    window.attachEvent("onscroll", handleScroll);
+    window.attachEvent("onscroll", function (){
+      handleScroll(paragraphScrollSpies);
+    });
   }
 }
 
 /**
  *  Spys on Paragraphs
  *
- *  @global {Array<Object>} paragraphScrollSpies
+ *  @param {Array<Object>} paragraphScrollSpies
  */
-function updateParagraphSpies(){
+function updateParagraphSpies(paragraphScrollSpies){
   let windowHeight = window.innerHeight;
   for (var i in paragraphScrollSpies){
     let element = paragraphScrollSpies[i];
@@ -444,10 +477,10 @@ function updateParagraphSpies(){
 /**
  *  Select primary paragraph reader is reading.
  *
- *  @global {Array<Object>} paragraphScrollSpies
+ *  @param {Array<Object>} paragraphScrollSpies
  *  @return {Array<HTMLElement>} an array of HTMLElements representing the paragraphs to watch.
  */
-function selectDominantParagraph(){
+function selectDominantParagraph(paragraphScrollSpies){
   let visibleParagraphs = paragraphScrollSpies.filter(spy => spy.inViewPort && spy.boxVisible > .5);
   let rankedParagraphs = visibleParagraphs.sort(function (a,b){
     return a.height-b.height;
@@ -473,14 +506,15 @@ function selectColor(id){
 /**
  *  Principal Queuing Function. Handles every scroll event.
  *
+ *  @param {Array<Object>} paragraphScrollSpies
  *  @global {Number} paragraphId
  */
-function handleScroll(){
+function handleScroll(paragraphScrollSpies){
   // Update Spies
-  updateParagraphSpies();
+  updateParagraphSpies(paragraphScrollSpies);
 
   // Select Paragraph
-  let paragraphSpy = selectDominantParagraph();
+  let paragraphSpy = selectDominantParagraph(paragraphScrollSpies);
 
   // Throttle Unnecessary Updates
   if (paragraphSpy === undefined || paragraphSpy === null){} else{
@@ -495,28 +529,71 @@ function handleScroll(){
   }
 }
 
+/**
+ *  Get an article container by class or id
+ *
+ *  @param {Object} container a dictionary reflecting a method to uniquely idenitfy a DOM element.
+ */
+function getArticleContainer(container){
+  let element;
+  // Priority is given to elements with an `id`
+  if (container.method.includes("id")){
+    element = document.getElementById(container.id);
+  }
+
+  // Check for the an element w/ classes matching
+  if (container.method.includes("class")){
+    let elements = document.getElementsByClassName(container.class);
+
+    // Currently can only handel if the class names are unique.
+    if (elements.length == 1){
+      element = elements[0];
+    }
+  }
+
+  if (element){
+    container.element = element;
+    return container;
+  } else {
+    return null;
+  }
+}
+
 var paragraphId = -1;
-var pageSelectedContainer = getArticleContainer();
-var paragraphs = getArticleContent(pageSelectedContainer);
 
 // Send Article for Processing
 chrome.runtime.sendMessage({
-  type: "sendArticleContent",
+  type: "checkArticleContent",
   url: window.location.href,
-  title: getArticleTitle(),
-  author:getArticleAuthor(pageSelectedContainer),
-  date: getArticleDate(pageSelectedContainer),
-  paragraphs: paragraphs
-}, function(response) {return true;});
+}, function(response) {
+  if (response === undefined || !("exists" in response) || (typeof response.exists == 'undefined')) {
+    console.error("[Story Lighting Reader] Improper Response to `checkArticleContent` query.");
+  } else {
+    if (response.exists){
+      // Article Processed Already
+      var pageSelectedContainer = getArticleContainer(response.article.element);
+      var paragraphs = response.article.paragraphs;
+    }else {
+      var pageSelectedContainer = findArticleContent();
+      var paragraphs = (pageSelectedContainer.element);
 
-var paragraphElements = markUpArticleParagraphs(pageSelectedContainer, paragraphs);
-var paragraphScrollSpies = paragraphElements.map(function(element) {return {
-  inViewPort: false,
-  partialView: false,
-  boxVisible: 0,
-  element: element,
-  id: element.dataset.paragraphId,
-  height: 0
-};});
+      // Send Article for Processing
+      chrome.runtime.sendMessage({
+        type: "sendArticleContent",
+        element: {
+          method: pageSelectedContainer.method,
+          class: pageSelectedContainer.class,
+          id: pageSelectedContainer.id
+        },
+        url: window.location.href,
+        title: getArticleTitle(),
+        author:getArticleAuthor(pageSelectedContainer.element),
+        date: getArticleDate(pageSelectedContainer.element),
+        paragraphs: paragraphs
+      }, function(response) {return true;});
+    }
 
-scrollSpyInit();
+    // Start Paragraph Scroll Spies
+    scrollSpyInit(pageSelectedContainer, paragraphs);
+  }
+});

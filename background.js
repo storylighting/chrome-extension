@@ -39,6 +39,29 @@ chrome.runtime.onMessage.addListener( function(message, sender, sendResponse) {
       sendResponse({recieved: true});
     }
 
+    if (message.type == "checkArticleContent"){
+      // Create URL Hash
+      let articleID = new Hashes.SHA1().hex(message.url);
+      db.collection("articles").doc(articleID).get().then((doc)=>{
+        if (doc.exists){
+          let data = doc.data();
+          sendResponse({exists: true, article: {
+            element: {
+              method: data.element.method,
+              id:  data.element.id,
+              class: data.element.class
+            },
+            paragraphs: data.paragraphs
+          }});
+        } else {
+          sendResponse({exists: false});
+        }
+      }).catch(error =>{
+        console.log("permission denied, or offline and not in local storage", error);
+        sendResponse({exists: false});
+      });
+    }
+
     if (message.type == "sendArticleContent"){
 
       // Create URL Hash
@@ -47,6 +70,11 @@ chrome.runtime.onMessage.addListener( function(message, sender, sendResponse) {
 
       db.collection("articles").doc(articleID).set({
         id: articleID,
+        element: {
+          method: message.element.method,
+          id: message.element.id,
+          class: message.element.class
+        },
         title: message.title,
         author: message.author,
         date: _date,
@@ -60,4 +88,6 @@ chrome.runtime.onMessage.addListener( function(message, sender, sendResponse) {
         sendResponse({recieved: false, error: error});
       });
     }
+
+    return true;
 });
