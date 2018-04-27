@@ -1,12 +1,24 @@
 /**
- *  Make a good attempt at discerning the closest top level container
- *  for a long-form article. Attemps to do so by finding the paragraph
- *  with the most number of words and proceeding upwards until 2/5th
- *  of the words on the page have been enveloped by the selection.
+ * Make a good attempt at discerning the closest top level container for a
+ * long-form article. Attemps to do so by finding the paragraph with the most
+ * number of words and proceeding upwards until 2/5th of the words on the page
+ * have been enveloped by the selection.
  *
- *  @return {HTMLElement} The HTMLElement that contains the article
+ * Borrows code and style from @ZachSaucier [Just Read Chrome Extension](https://github.com/ZachSaucier/Just-Read)
+ *
+ * @return {Object} An object consisting of the following properties:
+ *     - element {HTMLElement} The DOM element that contains the main body of
+ *           the article
+ *     - method {Array<String>} An Array of Strings consisting of methods used
+ *           to uniquely identify the article container upon future page loads
+ *           from the remote database. Valid values include `id` and `class`.
+ *     - class {String=} a string representing the list of class names to
+ *           match; class names are separated by whitespace
+ *     - id {String=} The ID of the element to locate. The ID is case-sensitive
+ *           string which is unique within the document; only one element may
+ *           have any given ID.
  */
-function getArticleContainer() {
+function detectArticleContainer() {
 
   var numWordsOnPage = document.body.innerText.match(/\S+/g).length, // Total Words on Page
   ps = document.body.querySelectorAll("p"); // All `p` paragraph selectors
@@ -60,13 +72,237 @@ function getArticleContainer() {
     selectedContainer = selectedContainer.parentNode;
   }
 
-  return selectedContainer;
+  // provide way of finding the element in the future.
+  let container = {
+    element: selectedContainer,
+    id: "",
+    class: "",
+    method: []
+  };
+
+  if (selectedContainer.id !== ""){
+    container.id = selectedContainer.id;
+    container.method.push("id");
+  }
+
+  if (selectedContainer.className !== ""){
+    container.class = selectedContainer.className;
+    container.method.push("class");
+  }
+
+  return container;
 }
 
 /**
- *  Check if a given element is on a blacklist due to a class or ID match
+ * Detects the article headline or title. Pulls the infromation from the page's
+ * <title> element attempting to remove the website title or publisher
+ * following common patterns of using tokens to seperate the two. The method
+ * looks for the following common tokens:
+ *     - — (em dash),
+ *     - – (en dash),
+ *     - - (hypen),
+ *     - | (pipe),
+ *     - : (colon)
  *
- *  @returns {HTMLElement, null} returns HTMLElement if not blacklisted, null otherwise.
+ * Borrows code and style from @ZachSaucier [Just Read Chrome Extension](https://github.com/ZachSaucier/Just-Read)
+ *
+ * @returns {string} Article title
+ */
+function detectArticleTitle() {
+    // Get the page's title
+    var title = document.head.querySelector("title").innerText;
+
+    // Get the part before the first — if it exists
+    if(title.indexOf(' — ') > 0) {
+        return title.substr(0, title.indexOf(' — '));
+    }
+
+    // Get the part before the first – if it exists
+    if(title.indexOf(' – ') > 0) {
+        return title.substr(0, title.indexOf(' – '));
+    }
+
+    // Get the part before the first - if it exists
+    if(title.indexOf(' - ') > 0) {
+        return title.substr(0, title.indexOf(' - '));
+    }
+
+    // Get the part before the first | if it exists
+    if(title.indexOf(' | ') > 0) {
+        return title.substr(0, title.indexOf(' | '));
+    }
+
+    // Get the part before the first : if it exists
+    if(title.indexOf(' : ') > 0) {
+        return title.substr(0, title.indexOf(' : '));
+    }
+
+    return title;
+}
+
+/**
+ * A helper to assist in checking common elements for a date like object. Used
+ * by `detectArticleDate`
+ *
+ * Borrows code and style from @ZachSaucier [Just Read Chrome Extension](https://github.com/ZachSaucier/Just-Read)
+ *
+ * @param element {HTMLElement} The DOM element to check
+ * @param attributeList {Array<String>} An array of strings representing properties
+ *     to check for a date
+ * @param deleteMe {Boolean} Whether or not to delete the element before
+ *     isolating article paragraph text.
+ * @returns {String}
+ */
+function checkElemForDate(element, attributeList, deleteMe) {
+  var myDate = false;
+  if(element) {
+    for(var i = 0; i < attributeList.length; i++) {
+      if(element[attributeList[i]]
+        && element[attributeList[i]] != "" //  Make sure it's not empty
+        && element[attributeList[i]].split(' ').length < 10) { // Make sure the date isn't absurdly long
+          myDate = element[attributeList[i]];
+
+          if(deleteMe) {
+            element.dataset.simpleDelete = true; // Flag it for removal later
+          }
+      }
+    }
+  }
+  return myDate;
+}
+
+/**
+ * Detect the article publication date by looking for elements that commonly
+ * contain the date / time of an article based on their class or meta
+ * attributes. Additionally attempts a quick santisation by removing any line
+ * breaks `<br>`, carriage returns `\n`, or newsroom added "on"'s.
+ *
+ * Borrows code and style from @ZachSaucier [Just Read Chrome Extension](https://github.com/ZachSaucier/Just-Read)
+ *
+ * @param {HTMLElement} articleContainer The DOM element that contains the
+ *     main body of the article
+ * @returns {string} Article publication date
+ */
+function detectArticleDate(articleContainer) {
+    // Make sure that the articleContainer isn't empty. If so utilise the body of the HTML page.
+    if(articleContainer == null)
+        articleContainer = document.body;
+
+    // Check to see if there's a date class
+    var date = false,
+        toCheck = [
+            [articleContainer.querySelector('[class^="date"]'), ["innerText"], true],
+            [articleContainer.querySelector('[class*="-date"]'), ["innerText"], true],
+            [articleContainer.querySelector('[class*="_date"]'), ["innerText"], true],
+            [document.body.querySelector('[class^="date"]'), ["innerText"], false],
+            [document.body.querySelector('[class*="-date"]'), ["innerText"], false],
+            [document.body.querySelector('[class*="_date"]'), ["innerText"], false],
+            [document.head.querySelector('meta[name^="date"]'), ["content"], false],
+            [document.head.querySelector('meta[name*="-date"]'), ["content"], false],
+            [articleContainer.querySelector('time'), ["datetime", "innerText"], true],
+            [document.body.querySelector('time'), ["datetime", "innerText"], false],
+        ];
+
+
+    for(var i = 0; i < toCheck.length; i++) {
+        if(!date) {
+            var checkObj = toCheck[i];
+            date = checkElemForDate(checkObj[0], checkObj[1], checkObj[2])
+        }
+    }
+
+    if(date)
+        return date.replace(/on\s/gi, '').replace(/(?:\r\n|\r|\n)/gi, '&nbsp;').replace(/[<]br[^>]*[>]/gi,'&nbsp;'); // Replace <br>, \n, and "on"
+
+    return "Unknown date";
+}
+
+/**
+ * Detect the article author or authors by looking for elements that commonly
+ * contain the date and / or time of an article based on their class or meta
+ * attributes. If an author or authors are found, additionally sanitise it by
+ * converting it to Title Case and remove any "by"'s added by the newsroom.
+ *
+ * Borrows code and style from @ZachSaucier [Just Read Chrome Extension](https://github.com/ZachSaucier/Just-Read)
+ *
+ * @param {HTMLElement} articleContainer The DOM element that contains the
+ *     main body of the article
+ * @returns {string} Article author name or authors names
+ */
+function detectArticleAuthor(articleContainer) {
+    // Make sure that the articleContainer isn't empty. If so utilise the body of the HTML page.
+    if(articleContainer == null)
+        articleContainer = document.body;
+
+    var author = null;
+
+    // Check to see if there's an author rel in the article
+    var elem = articleContainer.querySelector('[rel*="author"]');
+    if(elem) {
+        if(elem.innerText.split(/\s+/).length < 5 && elem.innerText.replace(/\s/g,'') !== "") {
+            elem.dataset.simpleDelete = true; // Flag it for removal later
+            author = elem.innerText;
+        }
+    }
+
+    // Check to see if there's an author class
+    elem = articleContainer.querySelector('[class*="author"]');
+    if(author === null && elem) {
+        if(elem.innerText.split(/\s+/).length < 5 && elem.innerText.replace(/\s/g,'') !== "") {
+            elem.dataset.simpleDelete = true; // Flag it for removal later
+            author = elem.innerText;
+        }
+    }
+
+    elem = document.head.querySelector('meta[name*="author"]');
+    // Check to see if there is an author available in the meta, if so get it
+    if(author === null && elem)
+        author = elem.getAttribute("content");
+
+    // Check to see if there's an author rel in the body
+    elem = document.body.querySelector('[rel*="author"]');
+    if(elem) {
+        if(elem.innerText.split(/\s+/).length < 5 && elem.innerText.replace(/\s/g,'') !== "") {
+            author = elem.innerText;
+        }
+    }
+
+    elem = document.body.querySelector('[class*="author"]');
+    if(author === null && elem) {
+        if(elem.innerText.split(/\s+/).length < 6 && elem.innerText.replace(/\s/g,'') !== "") {
+            author = elem.innerText;
+        }
+    }
+
+    if(author !== null && typeof author !== "undefined") {
+        // If it's all caps, try to properly capitalize it
+        if(author === author.toUpperCase()) {
+            var words = author.split(" "),
+                wordsLength = words.length;
+            for(var i = 0; i < wordsLength; i++) {
+                if(words[i].length < 3 && i != 0 && i != wordsLength)
+                    words[i] = words[i].toLowerCase(); // Assume it's something like "de", "da", "van" etc.
+                else
+                    words[i] = words[i].charAt(0).toUpperCase() + words[i].substr(1).toLowerCase();
+            }
+            author = words.join(' ');
+        }
+        return author.replace(/by\s/ig, ''); // Replace "by"
+    }
+
+    return "Unknown author";
+}
+
+/**
+ * Check if a given element is on a blacklist due to a class or ID match
+ *
+ * Borrows code and style from @ZachSaucier [Just Read Chrome Extension](https://github.com/ZachSaucier/Just-Read)
+ *
+ * @global blacklist {Array<String>} An array of strings representing class
+ *     names to ignore in paragraph counting for automated article main body
+ *     container selection.
+ * @returns {HTMLElement, null} returns HTMLElement if not blacklisted, null
+ *     otherwise.
  */
 var blacklist = ["comment"];
 function checkElementAgainstBlacklist(elem) {
@@ -88,15 +324,18 @@ function checkElementAgainstBlacklist(elem) {
 }
 
 /**
- *  Return the article as plaintext
+ * Isolate the principal body of the article, removing photographs, asides,
+ * etc. to retrieve individual pargraphs.
  *
- *  @param {HTMLElement} pageSelectedContainer the DOM container to pull the article from.
- *  @return {Array<String>} an array of unicode strings representing the paragraphs of the article.
+ * @param {HTMLElement} articleContainer The DOM element that contains the
+ *     main body of the article
+ * @return {Array<String>} An array of unicode strings representing the
+ *     paragraphs of the main body of the article.
  */
-function getArticleContent(pageSelectedContainer){
+function getArticleParagraphsText(articleContainer){
 
   var contentContainer = document.createElement("div");
-  contentContainer.innerHTML = pageSelectedContainer.innerHTML;
+  contentContainer.innerHTML = articleContainer.innerHTML;
 
   // Clean up strange formatting using `br` instead of `p`
   var pattern =  new RegExp ("<br/?>[ \r\n\s]*<br/?>", "g");
@@ -179,15 +418,21 @@ function getArticleContent(pageSelectedContainer){
 }
 
 /**
- *  Return the article as plaintext
+ * Add color droplets and markup to the article's paragraph elements allowing
+ * the individual paragraphs to be color editable and detected for queuing
+ * purposes.
  *
- *  @param {HTMLElement} pageSelectedContainer the DOM container to markup the article.
- *  @param {Array<String>} an array of unicode strings representing the paragraphs of the article.
- *  @return {Array<HTMLElement>} an array of HTMLElements representing the paragraphs to watch.
+ * @param {HTMLElement} articleContainer The DOM element that contains the
+ *     main body of the article
+ * @param {Array<String>} paragraphs An array of unicode strings representing
+ *     the paragraphs of the main body of the article. Used to verify marking
+ *     up paragraphs according to determined order.
+ * @return {Array<HTMLElement>} An array of `HTMLElement`s representing the
+ *     paragraph elements to watch.
  */
-function markUpArticleParagraphs(pageSelectedContainer, paragraphs){
+function markUpArticleParagraphs(articleContainer, paragraphs){
   var markedUpParagraphs = [];
-  var paragraphElements = pageSelectedContainer.getElementsByTagName("p");
+  var paragraphElements = articleContainer.getElementsByTagName("p");
   let j = 0;
   for (let i = 0, max = paragraphElements.length; i < max; i++) {
     let elem = paragraphElements[i];
@@ -213,24 +458,113 @@ function markUpArticleParagraphs(pageSelectedContainer, paragraphs){
 }
 
 /**
- *  Attach Scroll Spy to `scroll` like events.
+ * Add color droplets and markup to the article's paragraph elements allowing
+ * the individual paragraphs to be color editable and detected for queuing
+ * purposes.
+ *
+ * @param {HTMLElement} articleContainer The DOM element that contains the
+ *     main body of the article
+ * @param {Array<String>} paragraphs An array of unicode strings representing
+ *     the paragraphs of the main body of the article. Used to verify marking
+ *     up paragraphs according to determined order.
+ * @param {Array<String>} colors An array of hexadecimal colors specified with:
+ *     #RRGGBB, where RR (red), GG (green) and BB (blue) are hexadecimal
+ *     integers between 00 and FF specifying the intensity of the color.
+ * @return {Array<HTMLElement>} An array of `HTMLElement`s representing the
+ *     paragraph elements to watch.
  */
-function scrollSpyInit(){
+function setParagraphColors(articleContainer, paragraphs, colors){
+  var editedParagraphs = [];
+  var paragraphElements = articleContainer.getElementsByTagName("p");
+  let j = 0;
+  for (let i = 0, max = paragraphElements.length; i < max; i++) {
+    let elem = paragraphElements[i];
+    let paragraph = elem.innerText.trim();
+    let paragraphCandidate = paragraphs[j];
+
+    if (paragraph == paragraphCandidate){
+      if (setArticleParagraphColor(i, colors[i])){
+        editedParagraphs.push(elem);
+      }
+      j++;
+    }
+  }
+
+  return editedParagraphs;
+}
+
+/**
+ * Initalise the paragraph scroll spy events. Mark up DOM and attach scroll spy
+ * queuing logic to `scroll` like events.
+ *
+ * @param {HTMLElement} articleContainer The DOM element that contains the
+ *     main body of the article
+ * @param {Array<String>} paragraphs An array of unicode strings representing
+ *     the paragraphs of the main body of the article.
+ * @param {Array<String>=} colors An array of hexadecimal colors specified
+ *     with: #RRGGBB, where RR (red), GG (green) and BB (blue) are hexadecimal
+ *     integers between 00 and FF specifying the intensity of the color.
+ */
+function scrollSpyInit(articleContainer, paragraphs, colors = null){
+  var paragraphElements = markUpArticleParagraphs(articleContainer, paragraphs);
+
+  if (colors !== null && paragraphs.length == colors.length){
+    setParagraphColors(articleContainer, paragraphs, colors);
+  }
+
+  // Create Spy Objects
+  var paragraphScrollSpies = paragraphElements.map(function(element) {return {
+    inViewPort: false,
+    partialView: false,
+    boxVisible: 0,
+    element: element,
+    id: element.dataset.paragraphId,
+    height: 0
+  };});
+
   if (document.addEventListener){
-    document.addEventListener("touchmove", handleScroll, false);
-    document.addEventListener("scroll", handleScroll, false);
+    document.addEventListener("touchmove", function (){
+      handleScroll(paragraphScrollSpies);
+    }, false);
+    document.addEventListener("scroll", function (){
+      handleScroll(paragraphScrollSpies);
+    }, false);
   }
   else if (window.attachEvent){
-    window.attachEvent("onscroll", handleScroll);
+    window.attachEvent("onscroll", function (){
+      handleScroll(paragraphScrollSpies);
+    });
   }
 }
 
 /**
- *  Spys on Paragraphs
+ * Update the spy objects about their current visibility, position, and order
+ * on the page to be used to make decisions about queuing. Provides four
+ * updated properties for each spy:
+ *     - height {Number} Height in pixels of the element from the top of the
+ *           client viewport.
+ *     - inViewPort {Boolean} Whether or not the element is visible in the
+ *           viewport, including partially obstructed visibility
+ *     - partialView {Boolean} Whether or not the element is clipped in the
+ *           viewport.
+ *     - boxVisible {Number} Percentage of element visible to the user in the
+ *           boundary box.
  *
- *  @global {Array<Object>} paragraphScrollSpies
+ * @param {Array<Object>} paragraphScrollSpies An array of spy objects
+ *     consisting of the following properties:
+ *         - height {Number} Height in pixels of the element from the top of
+ *               the client viewport.
+ *         - inViewPort {Boolean} Whether or not the element is visible in the
+ *               viewport, including partially obstructed visibility
+ *         - partialView {Boolean} Whether or not the element is clipped in the
+ *               viewport.
+ *         - boxVisible {Number} Percentage of element visible to the user in
+ *               the boundary box.
+ *         - element {HTMLElement} Reference to the DOM element the spy
+ *               represents
+ *         - id {Number} Paragraph number, Zero-index based
  */
-function updateParagraphSpies(){
+function updateParagraphSpies(paragraphScrollSpies){
   let windowHeight = window.innerHeight;
   for (var i in paragraphScrollSpies){
     let element = paragraphScrollSpies[i];
@@ -267,17 +601,40 @@ function updateParagraphSpies(){
       element.inViewPort = true;
       element.boxVisible = 1;
     }
-
-  };
+  }
 }
 
 /**
- *  Select primary paragraph reader is reading.
+ * Select primary paragraph reader is reading.
  *
- *  @global {Array<Object>} paragraphScrollSpies
- *  @return {Array<HTMLElement>} an array of HTMLElements representing the paragraphs to watch.
+ * @param {Array<Object>} paragraphScrollSpies An array of spy objects
+ *     consisting of the following properties:
+ *         - height {Number} Height in pixels of the element from the top of
+ *               the client viewport.
+ *         - inViewPort {Boolean} Whether or not the element is visible in the
+ *               viewport, including partially obstructed visibility
+ *         - partialView {Boolean} Whether or not the element is clipped in the
+ *               viewport.
+ *         - boxVisible {Number} Percentage of element visible to the user in
+ *               the boundary box.
+ *         - element {HTMLElement} Reference to the DOM element the spy
+ *               represents
+ *         - id {Number} Paragraph number, Zero-index based
+ *  @return {Object} The Spy Object representing the paragraph to use for
+ *      queuing purposes consisting of the following properties:
+ *         - height {Number} Height in pixels of the element from the top of
+ *               the client viewport.
+ *         - inViewPort {Boolean} Whether or not the element is visible in the
+ *               viewport, including partially obstructed visibility
+ *         - partialView {Boolean} Whether or not the element is clipped in the
+ *               viewport.
+ *         - boxVisible {Number} Percentage of element visible to the user in
+ *               the boundary box.
+ *         - element {HTMLElement} Reference to the DOM element the spy
+ *               represents
+ *         - id {Number} Paragraph number, Zero-index based
  */
-function selectDominantParagraph(){
+function selectDominantParagraph(paragraphScrollSpies){
   let visibleParagraphs = paragraphScrollSpies.filter(spy => spy.inViewPort && spy.boxVisible > .5);
   let rankedParagraphs = visibleParagraphs.sort(function (a,b){
     return a.height-b.height;
@@ -290,52 +647,173 @@ function selectDominantParagraph(){
 }
 
 /**
- *  Pulls color from a given HTMLElement pargraph.
+ * Retrieves color from a given article main body pargraph.
  *
- *  @param {Number} paragraphId
- *  @return {Array<HTMLElement>} an array of HTMLElements representing the paragraphs to watch.
+ * @param {Number} paragraphId Paragraph number, Zero-index based
+ * @return {String} Hexadecimal value for the color tagged
  */
-function selectColor(id){
+function getArticleParagraphColor(id){
   let colorInputElement = document.getElementById(`storyLight-paragraph-id-${id}-color-input`);
   return colorInputElement.value;
 }
 
 /**
- *  Principal Queuing Function. Handles every scroll event.
+ * Update the color for a given article main body pargraph.
  *
- *  @global {Number} paragraphId
+ * @param {Number} paragraphId Paragraph number, Zero-index based
+ * @param {Array<String>=} colors A hexadecimal color specified with: #RRGGBB,
+ *     where RR (red), GG (green) and BB (blue) are hexadecimal integers
+ *     between 00 and FF specifying the intensity of the color.
+ * @return {Boolean} Whether or not the paragraph color was successfully changed.
  */
-function handleScroll(){
+function setArticleParagraphColor(id, value){
+  let colorInputElement = document.getElementById(`storyLight-paragraph-id-${id}-color-input`);
+  colorInputElement.value = value;
+  // Dispatch the event to mark the change on the UI.
+  colorInputElement.dispatchEvent(new Event('input'));
+  return colorInputElement.value;
+}
+
+/**
+ * Principal Queuing Function. Manages Story Lighting experience, updates
+ * paragraph spies with new location information, determines the principal
+ * paragraph being read, determines if a new color look needs to be issued.
+ * Triggered every scroll event.
+ *
+ * @param {Array<Object>} paragraphScrollSpies An array of spy objects
+ *     consisting of the following properties:
+ *         - height {Number} Height in pixels of the element from the top of
+ *               the client viewport.
+ *         - inViewPort {Boolean} Whether or not the element is visible in the
+ *               viewport, including partially obstructed visibility
+ *         - partialView {Boolean} Whether or not the element is clipped in the
+ *               viewport.
+ *         - boxVisible {Number} Percentage of element visible to the user in
+ *               the boundary box.
+ *         - element {HTMLElement} Reference to the DOM element the spy
+ *               represents
+ *         - id {Number} Paragraph number, Zero-index based
+ *  @global {Number} paragraphId Current paragraph number, Zero-index based
+ */
+function handleScroll(paragraphScrollSpies){
   // Update Spies
-  updateParagraphSpies();
+  updateParagraphSpies(paragraphScrollSpies);
 
   // Select Paragraph
-  let paragraphSpy = selectDominantParagraph();
+  let paragraphSpy = selectDominantParagraph(paragraphScrollSpies);
 
   // Throttle Unnecessary Updates
   if (paragraphSpy === undefined || paragraphSpy === null){} else{
     if (paragraphId != paragraphSpy.id){
-      let color = selectColor(paragraphSpy.id);
+      let color = getArticleParagraphColor(paragraphSpy.id);
 
       // Update Color Response
       chrome.runtime.sendMessage({type: "colorUpdate", color: color}, function(response) {return true;});
 
+      // Update NEW Current Paragraph
       paragraphId = paragraphSpy.id
     }
   }
 }
 
-var paragraphId = -1;
-var pageSelectedContainer = getArticleContainer();
-var paragraphs = getArticleContent(pageSelectedContainer);
-var paragraphElements = markUpArticleParagraphs(pageSelectedContainer, paragraphs);
-var paragraphScrollSpies = paragraphElements.map(function(element) {return {
-  inViewPort: false,
-  partialView: false,
-  boxVisible: 0,
-  element: element,
-  id: element.dataset.paragraphId,
-  height: 0
-};});
+/**
+ * Get an article container through information retrieved from remote database
+ * of pre-computed article colours.
+ *
+ * @param {Object} container An object consisting of the following properties:
+ *     - method {Array<String>} An Array of Strings consisting of methods used
+ *           to uniquely identify the article container upon future page loads
+ *           from the remote database. Valid values include `id` and `class`.
+ *     - class {String=} a string representing the list of class names to
+ *           match; class names are separated by whitespace
+ *     - id {String=} The ID of the element to locate. The ID is case-sensitive
+ *           string which is unique within the document; only one element may
+ *           have any given ID.
+ * @return {Object} An object consisting of the following properties:
+ *     - element {HTMLElement} The DOM element that contains the main body of
+ *           the article
+ *     - method {Array<String>} An Array of Strings consisting of methods used
+ *           to uniquely identify the article container upon future page loads
+ *           from the remote database. Valid values include `id` and `class`.
+ *     - class {String=} a string representing the list of class names to
+ *           match; class names are separated by whitespace
+ *     - id {String=} The ID of the element to locate. The ID is case-sensitive
+ *           string which is unique within the document; only one element may
+ *           have any given ID.
+ */
+function getArticleContainer(container){
+  let element;
+  // Priority is given to elements with an `id`
+  if (container.method.includes("id")){
+    element = document.getElementById(container.id);
+  }
 
-scrollSpyInit();
+  // Check for the an element w/ classes matching
+  if (container.method.includes("class")){
+    let elements = document.getElementsByClassName(container.class);
+
+    // Currently can only handel if the class names are unique.
+    if (elements.length == 1){
+      element = elements[0];
+    }
+  }
+
+  if (element){
+    container.element = element;
+    return container;
+  } else {
+    return null;
+  }
+}
+
+var paragraphId = -1;
+chrome.runtime.sendMessage({
+  type: "checkArticleContent",
+  url: window.location.href,
+}, function(response) {
+  if (response === undefined || !("exists" in response) || (typeof response.exists == 'undefined')) {
+    console.error("[Story Lighting Reader] Improper Response to `checkArticleContent` query.");
+  } else {
+    if (response.exists){
+      // Article Processed Already
+      var pageSelectedContainer = getArticleContainer(response.article.element);
+      var paragraphs = response.article.paragraphs;
+
+      var colors = null;
+      if (!("colors" in response.article) || (typeof response.article.colors == 'undefined')) {
+        console.error("[Story Lighting Reader] Missing article paragraph `color` array from response.");
+      } else {
+        if (response.article.colors.length != response.article.paragraphs.length){
+          console.error("[Story Lighting Reader] Article content length mismatch between paragraph `colors` aray and `paragraphs` text array.");
+        } else {
+          colors = response.article.colors;
+        }
+      }
+
+      // Start Paragraph Scroll Spies
+      scrollSpyInit(pageSelectedContainer.element, paragraphs, colors);
+    } else {
+      // Process New Article
+      var pageSelectedContainer = detectArticleContainer();
+      var paragraphs = getArticleParagraphsText(pageSelectedContainer.element);
+
+      // Send Article for Processing
+      chrome.runtime.sendMessage({
+        type: "sendArticleContent",
+        element: {
+          method: pageSelectedContainer.method,
+          class: pageSelectedContainer.class,
+          id: pageSelectedContainer.id
+        },
+        url: window.location.href,
+        title: detectArticleTitle(),
+        author:detectArticleAuthor(pageSelectedContainer.element),
+        date: detectArticleDate(pageSelectedContainer.element),
+        paragraphs: paragraphs
+      }, function(response) {return true;});
+
+      // Start Paragraph Scroll Spies
+      scrollSpyInit(pageSelectedContainer.element, paragraphs);
+    }
+  }
+});
