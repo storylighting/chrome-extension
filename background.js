@@ -83,7 +83,14 @@ chrome.runtime.onMessage.addListener( function(message, sender, sendResponse) {
         paragraphs: message.paragraphs
       })
       .then(function() {
-        sendResponse({recieved: true});
+        let unsubscribe = db.collection("articles").doc(articleID).onSnapshot(doc => {
+          let articleData = doc.data();
+          if (!("colors" in articleData) || (typeof articleData.colors == 'undefined')) {
+          } else {
+            unsubscribe();
+            sendResponse({recieved: true, colors: articleData.colors});
+          }
+        });
       })
       .catch(function(error) {
         sendResponse({recieved: false, error: error});

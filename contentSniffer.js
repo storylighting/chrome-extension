@@ -483,7 +483,7 @@ function setParagraphColors(articleContainer, paragraphs, colors){
     let paragraphCandidate = paragraphs[j];
 
     if (paragraph == paragraphCandidate){
-      if (setArticleParagraphColor(i, colors[i])){
+      if (setArticleParagraphColor(i, colors[i].hex)){
         editedParagraphs.push(elem);
       }
       j++;
@@ -810,7 +810,9 @@ chrome.runtime.sendMessage({
         author:detectArticleAuthor(pageSelectedContainer.element),
         date: detectArticleDate(pageSelectedContainer.element),
         paragraphs: paragraphs
-      }, function(response) {return true;});
+      }, function(response) {
+        setParagraphColors(pageSelectedContainer.element, paragraphs, response.colors);
+      });
 
       // Start Paragraph Scroll Spies
       scrollSpyInit(pageSelectedContainer.element, paragraphs);

@@ -17,6 +17,7 @@ p[data-paragraph-id]:hover .storyLight-color-indicator {
 }
 
 .storyLight-color-input {
+  z-index: 1500;
   visibility:hidden;
   padding: 0px;
   margin: 0px;
